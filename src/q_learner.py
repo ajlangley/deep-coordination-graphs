@@ -1,5 +1,6 @@
 from copy import deepcopy
 import numpy as np
+import torch
 from torch.optim import RMSprop
 from torch import nn
 
@@ -55,7 +56,7 @@ class QLearner(nn.Module):
             while done == False:
                 obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
                 a = self.qnet.argmax(obs).detach().cpu().numpy()
-                obs, r, done, _ = env.step(a)
+                obs, r, done, _ = self.env.step(a)
                 cum_r += r
 
         return cum_r / n_eval

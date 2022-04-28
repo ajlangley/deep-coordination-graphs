@@ -6,5 +6,7 @@ This is a simple implementation of Deep Coordination Graphs (DCG) (Boehmer et al
 
 # To do
 - [ ] Implement parameter sharing more explicitly using batch inference
-- [ ] Implement factored edges
+- [ ] Implement action selection by message passing
 - [ ] Add a script for training
+- [ ] Add gifs of learned behaviors
+- [x] Implement factored edges
