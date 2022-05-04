@@ -9,4 +9,5 @@ This is a simple implementation of Deep Coordination Graphs (DCG) (Boehmer et al
 - [ ] Implement action selection by message passing
 - [ ] Add a script for training
 - [ ] Add gifs of learned behaviors
+- [ ] Factored edges use a single network
 - [x] Implement factored edges

@@ -50,37 +50,45 @@ class DCG(nn.Module):
         super().cpu()
         self.actions = self.actions.cuda()
 
+
 class DCGNode(nn.Module):
     def __init__(self, network, agent_id):
         super().__init__()
         self.network = network
         self.agent_id = agent_id
 
+    def forward(self, obs):
+        local_obs = self.get_local_obs(obs)
+
+        return self.network.forward(local_obs)
+
     def eval_action(self, obs, a):
+        net_output = self.forward(obs)
         if obs.dim() == 3:
-            local_obs = torch.flatten(obs[:, self.agent_id], start_dim=1)
-            net_output = self.network(local_obs)
             q_val = torch.gather(net_output,
                                  1,
                                  a[:, self.agent_id].unsqueeze(-1)).ravel()
         else:
-            local_obs = obs[self.agent_id].ravel()
-            net_output = self.network(local_obs)
             q_val = net_output[a[self.agent_id]]
 
         return q_val
 
     def eval_actions(self, obs, actions):
+        net_output = self.forward(obs)
         if obs.dim() == 3:
-            local_obs = torch.flatten(obs[:, self.agent_id], start_dim=1)
-            net_output = self.network(local_obs)
             q_vals = net_output[:, actions[:, self.agent_id]]
         else:
-            local_obs = obs[self.agent_id].ravel()
-            net_output = self.network(local_obs)
             q_vals = net_output[actions[:, self.agent_id]]
 
         return q_vals
+
+    def get_local_obs(self, obs):
+        if obs.dim() == 3:
+            local_obs = torch.flatten(obs[:, self.agent_id], start_dim=1)
+        else:
+            local_obs = obs[self.agent_id].ravel()
+
+        return local_obs
 
 
 class DCGEdge(nn.Module):
@@ -92,44 +100,48 @@ class DCGEdge(nn.Module):
         self.agent_ids = [agent_id1, agent_id2]
         self.n_actions = n_actions
 
-    def forward(self, local_obs):
-        return self.network(local_obs)
-
-    def eval_action(self, obs, a):
+    def forward(self, obs):
+        local_obs = self.get_local_obs(obs)
         if obs.dim() == 3:
-            local_obs = torch.flatten(obs[:, self.agent_ids], start_dim=1)
-            net_output = self.forward(local_obs).view(obs.size(0),
+            net_output = self.network(local_obs).view(obs.size(0),
                                                       self.n_actions,
                                                       self.n_actions)
+        else:
+            net_output = self.network(local_obs).view(self.n_actions,
+                                                      self.n_actions)
+
+        return net_output
+
+    def eval_action(self, obs, a):
+        net_output = self.forward(obs)
+        if obs.dim() == 3:
             q_val = net_output[torch.arange(obs.size(0)),
                                a[:, self.agent_id1],
                                a[:, self.agent_id2]]
         else:
-            local_obs = obs[self.agent_ids].ravel()
-            net_output = self.forward(local_obs).view(self.n_actions,
-                                                      self.n_actions)
             q_val = net_output[a[self.agent_id1], a[self.agent_id2]]
 
         return q_val
 
 
     def eval_actions(self, obs, actions):
-        action_indices = tuple()
+        net_output = self.forward(obs)
         if obs.dim() == 3:
-            local_obs = torch.flatten(obs[:, self.agent_ids], start_dim=1)
-            net_output = self.forward(local_obs).view(obs.size(0),
-                                                      self.n_actions,
-                                                      self.n_actions)
             q_vals = net_output[:,
                                 actions[:, self.agent_id1],
                                 actions[:, self.agent_id2]]
         else:
-            local_obs = obs[self.agent_ids].ravel()
-            net_output = self.forward(local_obs).view(self.n_actions,
-                                                      self.n_actions)
             q_vals = net_output[actions[:, self.agent_id1], actions[:, self.agent_id2]]
 
         return q_vals
+
+    def get_local_obs(self, obs):
+        if obs.dim() == 3:
+            local_obs = torch.flatten(obs[:, self.agent_ids], start_dim=1)
+        else:
+            local_obs = obs[self.agent_ids].ravel()
+
+        return local_obs
 
 
 class FactoredDCGEdge(DCGEdge):
@@ -138,18 +150,17 @@ class FactoredDCGEdge(DCGEdge):
         self.factors1 = nn.ModuleList(factors1)
         self.factors2 = nn.ModuleList(factors2)
 
-    def forward(self, local_obs):
+    def forward(self, obs):
+        local_obs = self.get_local_obs(obs)
         if local_obs.dim() == 2:
             f1_outputs = torch.stack([f(local_obs) for f in self.factors1])
             f2_outputs = torch.stack([f(local_obs) for f in self.factors2])
             f1_outputs = torch.permute(f1_outputs, (1, 0, 2))
             f2_outputs = torch.permute(f2_outputs, (1, 0, 2))
-            payoff_mats = torch.einsum('ijk,ijl->ikl', f1_outputs, f2_outputs)
-            net_output = torch.flatten(payoff_mats, 1)
+            net_output = torch.einsum('ijk,ijl->ikl', f1_outputs, f2_outputs)
         else:
             f1_outputs = torch.stack([f(local_obs) for f in self.factors1])
             f2_outputs = torch.stack([f(local_obs) for f in self.factors2])
-            payoff_mat = torch.einsum('ij,ik->jk', f1_outputs, f2_outputs)
-            net_output = payoff_mat.ravel()
+            net_output = torch.einsum('ij,ik->jk', f1_outputs, f2_outputs)
 
         return net_output
