@@ -67,8 +67,9 @@ class DCG(nn.Module):
         node_vals = torch.transpose(node_vals, 0, 1)
         edge_vals = torch.transpose(edge_vals, 0, 1)
         a_max = torch.argmax(node_vals, dim=-1)
-        q_max = self._eval_action_from_outputs(a_max, node_vals, edge_vals, node_batch_indices,
-                                               node_indices, edge_batch_indices, edge_indices)
+        q_max = self._eval_action_from_outputs(a_max, node_vals, edge_vals,
+                                               node_batch_indices, node_indices,
+                                               edge_batch_indices, edge_indices)
 
         msg_forw = torch.zeros((obs.size(0), self.E, self.n_actions),
                                dtype=torch.float32,
@@ -354,7 +355,9 @@ class DCGSharedWeights(nn.Module):
                                                         self.n_actions,
                                                         self.n_actions)
         a_max = torch.argmax(node_vals, dim=-1)
-        q_max = self.eval_action(obs, a_max)
+        q_max = self._eval_action_from_outputs(a_max, node_vals, edge_vals,
+                                               node_batch_indices, node_indices,
+                                               edge_batch_indices, edge_indices)
 
         msg_forw = torch.zeros((obs.size(0), self.E, self.n_actions),
                                dtype=torch.float32,
