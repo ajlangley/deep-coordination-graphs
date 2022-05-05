@@ -5,9 +5,9 @@ This is a simple implementation of Deep Coordination Graphs (DCG) (Boehmer et al
 * Recurrent observation history embedding
 
 # To do
-- [ ] Implement parameter sharing more explicitly using batch inference
-- [ ] Implement action selection by message passing
 - [ ] Add a script for training
 - [ ] Add gifs of learned behaviors
 - [ ] Factored edges use a single network
+- [x] Implement parameter sharing more explicitly using batch inference
+- [x] Implement action selection by message passing
 - [x] Implement factored edges

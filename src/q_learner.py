@@ -69,13 +69,18 @@ class QLearner(nn.Module):
 
     def to(self, device):
         super().to(device)
+        self.qnet.to(device)
         self.qnet.actions = self.qnet.actions.to(device)
         self.device = device
 
     def cpu(self):
         super().cpu()
+        self.qnet.cpu()
         self.actions = self.actions.cpu()
+        self.device = torch.device('cpu')
 
     def cuda(self):
         super().cpu()
+        self.qnet.cuda()
         self.actions = self.actions.cuda()
+        self.device = torch.device('cuda')
