@@ -51,13 +51,14 @@ class QLearner(nn.Module):
         self.qnet.eval()
         cum_r = 0
         with torch.no_grad():
-            obs = self.env.reset()
-            done = False
-            while done == False:
-                obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
-                a = self.qnet.argmax(obs).detach().cpu().numpy()
-                obs, r, done, _ = self.env.step(a)
-                cum_r += r
+            for _ in range(n_eval):
+                obs = self.env.reset()
+                done = False
+                while done == False:
+                    obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
+                    a = self.qnet.argmax(obs).detach().cpu().numpy()
+                    obs, r, done, _ = self.env.step(a)
+                    cum_r += r
 
         return cum_r / n_eval
 
