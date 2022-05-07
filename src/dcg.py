@@ -264,7 +264,7 @@ class FactoredDCGEdge(DCGEdge):
 
 
 class DCGSharedWeights(nn.Module):
-    def __init__(self, f_node, f_edge, n_nodes, n_actions, edges=None, msg_passing_iters=5,
+    def __init__(self, f_node, f_edge, n_nodes, n_actions, edges=None, msg_passing_iters=8,
                  device=torch.device('cpu')):
         super().__init__()
         self.f_node = f_node
