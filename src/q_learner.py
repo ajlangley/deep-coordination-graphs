@@ -42,7 +42,7 @@ class QLearner(nn.Module):
             else:
                 q_max = self.q_target.max(obs_new)
         target = r + (1 - done) * self.discount * q_max
-        loss = self.loss_fun(q_pred, target)
+        loss = self.loss_fun(q_pred, target.detach())
         loss.backward()
         self.optimizer.step()
         self.optimizer.zero_grad()

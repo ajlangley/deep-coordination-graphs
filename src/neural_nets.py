@@ -2,6 +2,31 @@ import torch
 from torch import nn
 
 
+class FactoredMLP(nn.Module):
+    def __init__(self, input_size, hidden_sizes, K, n_actions):
+        super().__init__()
+        f1 = build_mlp(input_size, hidden_sizes, K * n_actions)
+        f2 = build_mlp(input_size, hidden_sizes, K * n_actions)
+        self.factors = nn.ModuleList([f1, f2])
+        self.K = K
+        self.n_actions = n_actions
+
+    def __call__(self, x):
+        f1_output = self.factors[0](x)
+        f2_output = self.factors[1](x)
+        f1_output = f1_output.view(-1, self.K, self.n_actions)
+        f2_output = f2_output.view(-1, self.K, self.n_actions)
+
+        if x.dim() == 2:
+            net_output = torch.einsum('ijk,ijl->ikl', f1_output, f2_output)
+        else:
+            net_output = torch.einsum('ij,ik->jk', f1_output, f2_output)
+
+        net_output = torch.flatten(net_output, start_dim=-2)
+
+        return net_output
+        
+
 class GRUFeatExtractor(nn.Module):
     def __init__(self, input_size, h_size):
         super().__init__()

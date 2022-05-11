@@ -17,3 +17,7 @@ class FullyObservableCombat(Combat):
             obs[self.n_agents + i, 3] = self.opp_health[i] / self._init_health
 
         return np.broadcast_to(obs.ravel(), (self.n_agents, N * 4))
+
+    @staticmethod
+    def is_visible(source_pos, target_pos):
+        return True

@@ -5,7 +5,7 @@ import torch
 from src.replay_buffer import Experience, ReplayBuffer
 
 def train_q_learner(q_learner, env, n_episodes=10**6, batch_size=32, update_target_every=100,
-                    buffer_capacity=10**5, eps_max=1, eps_min=0.05, eps_decay=0.99, eval_every=50,
+                    buffer_capacity=10**6, eps_max=1, eps_min=0.05, eps_decay=0.99, eval_every=50,
                     n_eval=1, save_every=None, save_path=None, device=torch.device('cuda')):
     t0 = dt.now()
     eval_means = []

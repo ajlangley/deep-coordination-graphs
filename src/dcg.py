@@ -32,28 +32,29 @@ class DCG(nn.Module):
 
         return node_vals / self.N + edge_vals / self.E
 
-#     def argmax(self, obs):
-#         q_vals = self._compute_q_vals(obs)
-
-#         return self.actions[torch.argmax(q_vals, dim=-1)]
-
-#     def max(self, obs):
-#         q_vals = self._compute_q_vals(obs)
-
-#         return torch.max(q_vals, dim=-1)[0]
-
     def argmax(self, obs):
-        max_val, a_max = self.message_passing(obs)
+        q_vals = self._compute_q_vals(obs)
 
-        return a_max
+        return self.actions[torch.argmax(q_vals, dim=-1)]
 
     def max(self, obs):
-        max_val, a_max = self.message_passing(obs)
+        q_vals = self._compute_q_vals(obs)
 
-        return max_val
+        return torch.max(q_vals, dim=-1)[0]
+
+    # def argmax(self, obs):
+    #     max_val, a_max = self.message_passing(obs)
+    #
+    #     return a_max
+    #
+    # def max(self, obs):
+    #     max_val, a_max = self.message_passing(obs)
+    #
+    #     return max_val
 
     def message_passing(self, obs):
-        if obs.dim() == 2:
+        batch_size = 1 if obs.dim() == 2 else obs.size(0)
+        if batch_size == 1:
             obs = torch.unsqueeze(obs, 0)
 
         batch_size = obs.size(0)
@@ -101,6 +102,9 @@ class DCG(nn.Module):
             update_indices = torch.argwhere(q_val > q_max).ravel()
             a_max[update_indices] = a[update_indices]
             q_max[update_indices] = q_val[update_indices]
+
+        if batch_size == 1:
+            q_max, a_max = q_max.ravel(), a_max.ravel()
 
         return q_max, a_max
 
