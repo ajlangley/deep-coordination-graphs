@@ -134,7 +134,7 @@ class DCG(nn.Module):
         super().to(device)
         self.actions = self.actions.to(device)
         self.edges_from = self.edges_from.to(device)
-        self.edgse_to = self.edges_to.to(device)
+        self.edges_to = self.edges_to.to(device)
         self.device = device
 
     def cpu(self):
