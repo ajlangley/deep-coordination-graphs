@@ -33,24 +33,14 @@ class DCG(nn.Module):
         return node_vals / self.N + edge_vals / self.E
 
     def argmax(self, obs):
-        q_vals = self._compute_q_vals(obs)
+        max_val, a_max = self.message_passing(obs)
 
-        return self.actions[torch.argmax(q_vals, dim=-1)]
+        return a_max
 
     def max(self, obs):
-        q_vals = self._compute_q_vals(obs)
+        max_val, a_max = self.message_passing(obs)
 
-        return torch.max(q_vals, dim=-1)[0]
-
-    # def argmax(self, obs):
-    #     max_val, a_max = self.message_passing(obs)
-    #
-    #     return a_max
-    #
-    # def max(self, obs):
-    #     max_val, a_max = self.message_passing(obs)
-    #
-    #     return max_val
+        return max_val
 
     def message_passing(self, obs):
         batch_size = 1 if obs.dim() == 2 else obs.size(0)
@@ -145,7 +135,7 @@ class DCG(nn.Module):
         self.device = torch.device('cpu')
 
     def cuda(self):
-        super().cpu()
+        super().cuda()
         self.actions = self.actions.cuda()
         self.edges_from = self.edges_from.cuda()
         self.edges_to = self.edges_to.cuda()

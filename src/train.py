@@ -13,8 +13,6 @@ def train_q_learner(q_learner, env, n_episodes=10**6, batch_size=32, update_targ
     q_learner.to(device)
     try:
         for episode in range(n_episodes):
-            if episode % update_target_every == None:
-                q_target = None
             eps = max(eps_max * eps_decay ** episode, eps_min)
             obs = env.reset()
             done = False
@@ -32,11 +30,12 @@ def train_q_learner(q_learner, env, n_episodes=10**6, batch_size=32, update_targ
                     q_learner.train(*replay_buffer.sample(batch_size))
 
             msg = f'Episode: [{episode + 1}]/[{n_episodes}], Time Elapsed: {dt.now() - t0}'
-            print(msg, end='\r')
+            # print(msg, end='\r')
 
             if episode % eval_every == 0:
                 eval_means.append(q_learner.evaluate(n_eval))
-                print(f'\n\tEval. Reward: {eval_means[-1]}')
+                # print(f'\n\tEval. Reward: {eval_means[-1]}')
+                print(f'[{episode}/{n_episodes}] Eval. reward: {eval_means[-1]}, Time Elapsed: {dt.now() - t0}')
             if episode % update_target_every == 0:
                 q_learner.update_target_net()
             if save_every is not None and episode % save_every == 0:
