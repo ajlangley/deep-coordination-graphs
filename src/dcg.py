@@ -142,6 +142,181 @@ class DCG(nn.Module):
         self.device = torch.device('cuda')
 
 
+class RDCG(nn.Module):
+    def __init__(self, nodes, edges, encoder, rnn_cell, n_actions,
+                 device=torch.device('cpu'), msg_passing_iters=8):
+        super().__init__()
+        self.nodes = nn.ModuleList(nodes)
+        self.edges = nn.ModuleList(edges)
+        self.encoder = encoder
+        self.rnn_cell = rnn_cell
+        self.N = len(nodes)
+        self.E = len(edges)
+        self.n_actions = n_actions
+        self.actions = torch.tensor(list(product(range(n_actions),
+                                                 repeat=len(nodes))),
+                                    dtype=torch.int64)
+        self.msg_passing_iters = msg_passing_iters
+        self.device = device
+
+        self.node_indices = torch.arange(self.N)
+        self.edge_indices = torch.arange(self.E)
+        self.edges_from = torch.tensor([e.agent_id1 for e in edges],
+                                        device=device,
+                                        dtype=torch.long)
+        self.edges_to = torch.tensor([e.agent_id2 for e in edges],
+                                     device=device,
+                                     dtype=torch.long)
+
+        self.h = None
+
+    def eval_action(self, obs, a):
+        B, T = obs.size()[:2]
+        a = a.view(B * T, -1)
+        encoding = self._encode_obs(obs)
+        encoding = encoding.reshape(B * T, self.N, -1)
+        node_vals = sum([f.eval_action(encoding, a) for f in self.nodes])
+        edge_vals = sum([f.eval_action(encoding, a) for f in self.edges])
+        q_val = node_vals / self.N + edge_vals / self.E
+        q_val = q_val.view(B, T)
+
+        return q_val
+
+    def max(self, obs):
+        B, T = obs.size()[:2]
+        encoding = self._encode_obs(obs)
+        encoding = encoding.reshape(B * T, self.N, -1)
+#         q_max = self._message_passing(encoding)[0]
+#         q_max = q_max.view(B, T)
+
+        q_vals = self._compute_q_vals(encoding)
+        q_max = torch.max(q_vals, dim=-1).value.view(B, T)
+
+        return q_max
+
+    def argmax(self, obs):
+        B, T = obs.size()[:2]
+        encoding = self._encode_obs(obs)
+        encoding = encoding.reshape(B * T, self.N, -1)
+#         a_max = self._message_passing(encoding)[1]
+#         a_max = a_max.view(B, T, -1)
+
+        q_vals = self._compute_q_vals(encoding)
+        max_indices = torch.argmax(q_vals, dim=-1)
+        a_max = self.actions[max_indices].view(B, T, -1)
+
+        return a_max
+
+    def _message_passing(self, obs):
+        # Should create all these tensors using torch functions eventually...
+        batch_size = obs.size(0)
+        node_batch_indices = np.repeat(np.arange(batch_size), self.N)
+        node_indices = np.tile(np.arange(self.N), batch_size)
+        edge_batch_indices = np.repeat(np.arange(batch_size), self.E)
+        edge_indices = np.tile(np.arange(self.E), batch_size)
+
+        node_vals = torch.stack([f.forward(obs) for f in self.nodes])
+        edge_vals = torch.stack([f.forward(obs) for f in self.edges])
+        node_vals = torch.transpose(node_vals, 0, 1)
+        edge_vals = torch.transpose(edge_vals, 0, 1)
+        a_max = torch.argmax(node_vals, dim=-1)
+        q_max = self._eval_action_from_outputs(a_max, node_vals, edge_vals,
+                                               node_batch_indices, node_indices,
+                                               edge_batch_indices, edge_indices)
+
+        msg_forw = torch.zeros((obs.size(0), self.E, self.n_actions),
+                               dtype=torch.float32,
+                               device=self.device)
+        msg_back = torch.zeros((obs.size(0), self.E, self.n_actions),
+                               dtype=torch.float32,
+                               device=self.device)
+
+        q = node_vals / self.N
+        for t in range(1, self.msg_passing_iters + 1):
+            forw_vals = torch.unsqueeze(q[:, self.edges_from] - msg_back, -1) \
+                            + edge_vals / self.E
+            back_vals = torch.unsqueeze(q[:, self.edges_to] - msg_forw, -1) \
+                            + torch.transpose(edge_vals, -2, -1) / self.E
+            msg_forw = torch.max(forw_vals, dim=-2)[0]
+            msg_back = torch.max(back_vals, dim=-2)[0]
+            # Message normalization
+            msg_forw -= torch.sum(msg_forw, dim=-1).unsqueeze(-1) / self.n_actions
+            msg_back -= torch.sum(msg_back, dim=-1).unsqueeze(-1) / self.n_actions
+            # Update q. Implement as a loop for now
+            q = node_vals / self.N
+            for i, (j, k) in enumerate(zip(self.edges_from, self.edges_to)):
+                q[:, k] += msg_forw[:, i]
+                q[:, j] += msg_back[:, i]
+
+            a = torch.argmax(q, dim=-1)
+            q_val = self._eval_action_from_outputs(a, node_vals, edge_vals, node_batch_indices,
+                                                   node_indices, edge_batch_indices, edge_indices)
+            update_indices = torch.argwhere(q_val > q_max).ravel()
+            a_max[update_indices] = a[update_indices]
+            q_max[update_indices] = q_val[update_indices]
+
+        return q_max, a_max
+
+    def _compute_q_vals(self, obs):
+        node_vals = sum([f.eval_actions(obs, self.actions) for f in self.nodes])
+        edge_vals = sum([f.eval_actions(obs, self.actions) for f in self.edges])
+        q_vals = node_vals / self.N + edge_vals / self.E
+
+        return q_vals
+
+    def _eval_action_from_outputs(self, a, node_outputs, edge_outputs, node_batch_indices,
+                                  node_indices, edge_batch_indices, edge_indices):
+        batch_size = len(a)
+        node_a_indices = a[:, np.arange(self.N)].ravel()
+        edge_a_indices_1 = a[:, self.edges_from].ravel()
+        edge_a_indices_2 = a[:, self.edges_to].ravel()
+        node_vals = node_outputs[node_batch_indices, node_indices,
+                                 node_a_indices].view(batch_size, -1)
+        node_val = torch.sum(node_vals, dim=1)
+        edge_vals = edge_outputs[edge_batch_indices, edge_indices,
+                                 edge_a_indices_1, edge_a_indices_2].view(batch_size, -1)
+        edge_val = torch.sum(edge_vals, dim=1)
+
+        return node_val / self.N + edge_val / self.E
+
+    def _encode_obs(self, obs):
+        B, T = obs.size()[:2]
+        encoding = self.encoder(obs)
+        encoding = torch.permute(encoding, (0, 2, 1, 3)).reshape(B * self.N, T, -1)
+        rnn_output, self.h = self.rnn_cell(encoding, hx=self.h)
+        rnn_output = torch.permute(rnn_output.view(B, self.N, T, -1),
+                                   (0, 2, 1, 3))
+
+        return rnn_output
+
+    def to(self, device):
+        super().to(device)
+        self.actions = self.actions.to(device)
+        self.node_indices = self.node_indices.to(device)
+        self.edge_indices = self.edge_indices.to(device)
+        self.edges_from = self.edges_from.to(device)
+        self.edges_to = self.edges_to.to(device)
+        self.device = device
+
+    def cpu(self):
+        super().cpu()
+        self.actions = self.actions.cpu()
+        self.node_indices = self.node_indices.cpu()
+        self.edge_indices = self.edge_indices.cpu()
+        self.edges_from = self.edges_from.cpu()
+        self.edges_to = self.edges_to.cpu()
+        self.device = torch.device('cpu')
+
+    def cuda(self):
+        super().cuda()
+        self.actions = self.actions.cuda()
+        self.node_indices = self.node_indices.cuda()
+        elf.edge_indices = self.edge_indices.cuda()
+        self.edges_from = self.edges_from.cuda()
+        self.edges_to = self.edges_to.cuda()
+        self.device = torch.device('cuda')
+
+
 class DCGNode(nn.Module):
     def __init__(self, network, agent_id):
         super().__init__()
