@@ -158,8 +158,7 @@ class RecurrentQLearner(nn.Module):
 
     def generate_eps_greedy_trajectory(self, eps):
         self.reset_rnn_cell()
-        self.env.reset()
-        obs = env.reset()
+        obs = self.env.reset()
         observations = [obs]
         actions = []
         rewards = []

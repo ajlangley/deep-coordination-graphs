@@ -2,9 +2,9 @@ from datetime import datetime as dt
 import numpy as np
 import torch
 
-from src.replay_buffer import Experience, ReplayBuffer
+from src.replay_buffer import *
 
-def train_q_learner(q_learner, env, n_episodes=10**6, batch_size=32, update_target_every=100,
+def train_q_learner(q_learner, env, n_episodes=10**6, batch_size=32, update_target_every=200,
                     buffer_capacity=10**6, eps_max=1, eps_min=0.05, eps_decay=0.99, eval_every=50,
                     n_eval=1, save_every=None, save_path=None, device=torch.device('cuda')):
     t0 = dt.now()

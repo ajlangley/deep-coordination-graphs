@@ -46,7 +46,7 @@ class EpisodeReplayBuffer:
         seq_len = np.max(episode_lengths)
         fill_mask = torch.zeros((sample_size, seq_len - 1))
         for i in range(sample_size):
-            fill_mask[i, :len(episodes[i])] = 1
+            fill_mask[i, :len(episodes[i]) - 1] = 1
 
         obs = [torch.tensor(e.observations, dtype=torch.float32) \
                    for e in episodes]
